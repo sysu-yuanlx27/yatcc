@@ -1,7 +1,7 @@
 # 你的学号
-set(STUDENT_ID "0123456789")
+set(STUDENT_ID "23336294")
 # 你的姓名
-set(STUDENT_NAME "某某某")
+set(STUDENT_NAME "元朗曦")
 
 # 实验一的完成方式："flex"或"antlr"
 set(TASK1_WITH "flex")
@@ -11,18 +11,18 @@ set(TASK1_LOG_LEVEL 3)
 # 实验二的完成方式："bison"或"antlr"
 set(TASK2_WITH "bison")
 # 是否在实验二复活，ON或OFF
-set(TASK2_REVIVE ON)
+set(TASK2_REVIVE OFF)
 # 实验二的日志级别，级别从低到高为0-3
 set(TASK2_LOG_LEVEL 3)
 
 # 是否在实验三复活，ON或OFF
-set(TASK3_REVIVE ON)
+set(TASK3_REVIVE OFF)
 
 # 是否在实验四复活，ON或OFF
-set(TASK4_REVIVE ON)
+set(TASK4_REVIVE OFF)
 
 # 是否在实验五复活，ON或OFF
-set(TASK5_REVIVE ON)
+set(TASK5_REVIVE OFF)
 
 # ############################################################################ #
 # 以下内容为内部环境配置，一般情况下不需要学生修改，学生本地的修改对实验评测无影响。
@@ -34,7 +34,7 @@ if(DEFINED ENV{YatCC_ANTLR_DIR})
 else()
   set(_antlr_dir "${CMAKE_SOURCE_DIR}/antlr")
 endif()
-message("ANTLR目录为 ${_antlr_dir}")
+message("ANTLR 目录为 ${_antlr_dir}")
 set(antlr4-runtime_DIR "${_antlr_dir}/install/lib/cmake/antlr4-runtime")
 set(antlr4-generator_DIR "${_antlr_dir}/install/lib/cmake/antlr4-generator")
 set(ANTLR4_JAR_LOCATION "${_antlr_dir}/antlr.jar")
@@ -45,7 +45,7 @@ if(DEFINED ENV{YatCC_LLVM_DIR})
 else()
   set(_llvm_dir "${CMAKE_SOURCE_DIR}/llvm")
 endif()
-message("LLVM目录为 ${_llvm_dir}")
+message("LLVM 目录为 ${_llvm_dir}")
 set(LLVM_DIR "${_llvm_dir}/install/lib/cmake/llvm")
 set(LLVM_INSTALL_DIR "${_llvm_dir}/install")
 set(CLANG_EXECUTABLE "${_llvm_dir}/install/bin/clang")
@@ -57,7 +57,7 @@ if(DEFINED ENV{YatCC_PYBIND11_DIR})
 else()
   set(_pybind11_dir "${CMAKE_SOURCE_DIR}/pybind11")
 endif()
-message("PYBIND11目录为 ${_pybind11_dir}")
+message("PYBIND11 目录为 ${_pybind11_dir}")
 set(pybind11_DIR "${_pybind11_dir}/install/share/cmake/pybind11")
 
 # 测试运行时限（秒）
