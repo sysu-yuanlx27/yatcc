@@ -12,11 +12,19 @@ using namespace lex;
 
 D     [0-9]
 L     [a-zA-Z_]
+H     [a-fA-F0-9]
 IS    ((u|U)|(u|U)?(l|L|ll|LL)|(l|L|ll|LL)(u|U))
 
 %%
 
 "int"       { ADDCOL(); COME(INT); }
+"const"     { ADDCOL(); COME(CONST); }
+"void"      { ADDCOL(); COME(VOID); }
+"if"        { ADDCOL(); COME(IF); }
+"else"      { ADDCOL(); COME(ELSE); }
+"while"     { ADDCOL(); COME(WHILE); }
+"break"     { ADDCOL(); COME(BREAK); }
+"continue"  { ADDCOL(); COME(CONTINUE); }
 "return"    { ADDCOL(); COME(RETURN); }
 
 "("         { ADDCOL(); COME(L_PAREN); }
@@ -27,22 +35,53 @@ IS    ((u|U)|(u|U)?(l|L|ll|LL)|(l|L|ll|LL)(u|U))
 "}"         { ADDCOL(); COME(R_BRACE); }
 
 "+"         { ADDCOL(); COME(PLUS); }
+"-"         { ADDCOL(); COME(MINUS); }
+"*"         { ADDCOL(); COME(STAR); }
+"/"         { ADDCOL(); COME(SLASH); }
+"%"         { ADDCOL(); COME(PERCENT); }
+
+"=="        { ADDCOL(); COME(EQUAL_EQUAL); }
+"="         { ADDCOL(); COME(EQUAL); }
+"!="        { ADDCOL(); COME(EXCLAIM_EQUAL); }
+"!"         { ADDCOL(); COME(EXCLAIM); }
+
+"<="        { ADDCOL(); COME(LESS_EQUAL); }
+"<"         { ADDCOL(); COME(LESS); }
+">="        { ADDCOL(); COME(GREATER_EQUAL); }
+">"         { ADDCOL(); COME(GREATER); }
+
+"&&"        { ADDCOL(); COME(AMP_AMP); }
+"||"        { ADDCOL(); COME(PIPE_PIPE); }
 
 ";"         { ADDCOL(); COME(SEMI); }
 ","         { ADDCOL(); COME(COMMA); }
-
-"="         { ADDCOL(); COME(EQUAL); }
 
 {L}({L}|{D})*         { ADDCOL(); COME(IDENTIFIER); }
 
 L?\"(\\.|[^\\"\n])*\" { ADDCOL(); COME(STRING_LITERAL); }
 
+[0][xX]{H}+{IS}?      { ADDCOL(); COME(CONSTANT); }
 0[0-7]*{IS}?          { ADDCOL(); COME(CONSTANT); }
 [1-9]{D}*{IS}?        { ADDCOL(); COME(CONSTANT); }
 
-^#[^\n]*              { return ~YYEOF; } /* 预处理信息处理，可以从预处理信息中获得文件名以及行号 */
+^#[^\n]*\n            {
+	handleLineDirective(yytext, yyleng);
+	return ~YYEOF;
+} /* 预处理信息处理，可以从预处理信息中获得文件名以及行号 */
 
-[ \t\v\n\f]           { return ~YYEOF; } /* 需要处理行号和列号信息 */
+[ \t\v\f]+            {
+	g.mLeadingSpace = true;
+	g.mColumn += yyleng;
+	return ~YYEOF;
+} /* 需要处理行号和列号信息 */
+
+\n                     {
+	g.mStartOfLine = true;
+	g.mLeadingSpace = false;
+	g.mColumn = 1;
+	g.mLine += 1;
+	return ~YYEOF;
+}
 
 <<EOF>>     { ADDCOL(); COME(YYEOF); }
 
