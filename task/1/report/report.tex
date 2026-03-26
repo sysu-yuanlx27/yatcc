@@ -1,0 +1,86 @@
+\documentclass[UTF8,a4paper,12pt]{ctexart}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{hyperref}
+
+\geometry{left=2.8cm,right=2.8cm,top=2.8cm,bottom=2.8cm}
+\setstretch{1.25}
+
+\title{实验一报告：词法分析器（Flex 实现）}
+\author{姓名：\underline{\hspace{3cm}} \quad 学号：\underline{\hspace{3cm}}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{实验目的}
+本实验旨在掌握编译器前端中词法分析阶段的基本原理与工程实现方法，能够将源程序字符流切分为具有语义类别的词法单元（Token）。
+
+通过本实验，我需要达到以下目标：
+\begin{itemize}
+  \item 理解词法分析器在编译流程中的作用，以及其与语法分析器之间的输入输出关系；
+  \item 熟悉 Flex 的规则描述方式，能够基于正则表达式定义关键字、标识符、常量、运算符与分隔符；
+  \item 正确维护词法单元的位置信息（文件名、行号、列号）与辅助标记（StartOfLine、LeadingSpace）；
+  \item 实现与参考输出一致的词法分析结果，并通过官方测例与自定义测例验证正确性。
+\end{itemize}
+
+\section{实验原理}
+词法分析的输入是源代码字符序列，输出是按顺序产生的 Token 序列。每个 Token 至少包含类型与文本值，本实验进一步要求输出位置信息与格式化标记。
+
+基于 Flex 的实现核心如下：
+\begin{enumerate}
+  \item 使用正则规则描述不同词法类别，并在匹配成功后返回相应的 token id；
+  \item 通过全局状态维护当前扫描位置，记录行列号、当前文件名与 token 起始列；
+  \item 在识别普通空白和换行时更新 StartOfLine、LeadingSpace 及列号；
+  \item 在识别预处理行标记（\# line \"file\"）时同步逻辑源文件与逻辑行号；
+  \item 在输出阶段将 token 类型、文本、标记和位置拼接为与 clang -cc1 -dump-tokens 对齐的格式。
+\end{enumerate}
+
+本实验中，词法规则覆盖了实验测例所需的关键字、比较与逻辑运算符、算术运算符、括号与分隔符、标识符及整数常量（含十六进制、八进制与十进制）。
+
+\section{实验内容}
+本次实验的主要工作可分为以下四部分。
+
+\subsection*{1. 词法规则补全}
+在 Flex 规则文件中补全并细化 token 规则，包含：
+\begin{itemize}
+  \item 关键字：int、const、void、if、else、while、break、continue、return；
+  \item 运算符：+、-、*、/、\%、==、!=、!、<、<=、>、>=、\&\&、||、=；
+  \item 分隔符：()、[]、\{\}、,、;；
+  \item 标识符与整数常量（十进制、八进制、十六进制）。
+\end{itemize}
+
+\subsection*{2. 位置信息与输出格式实现}
+在词法状态中增加 token 起始列信息，并在输出时给出
+\texttt{Loc=<file:line:col>}。同时维护最近非 EOF token 位置，使 EOF 位置与参考输出保持一致。
+
+\subsection*{3. 空白与预处理信息处理}
+对空格、制表符、换行进行分别处理：
+\begin{itemize}
+  \item 空白字符用于设置 LeadingSpace 与列号推进；
+  \item 换行用于设置 StartOfLine、重置列号并推进逻辑行号；
+  \item 预处理行用于同步逻辑文件名和行号，保证定位信息映射回原始源文件。
+\end{itemize}
+
+\subsection*{4. 测试与验证}
+通过以下方式进行验证：
+\begin{itemize}
+  \item 运行官方评测目标 \texttt{task1-score}，检查所有测例是否通过；
+  \item 运行 \texttt{task1-diy-answer} 和 \texttt{task1-diy} 相关测试，验证自定义测例；
+  \item 对典型样例与 \texttt{clang -cc1 -dump-tokens} 输出进行对比，确认 token 类型、文本和值位置一致。
+\end{itemize}
+
+实验结果显示官方测例全部通过，总分达到 100 分，自定义测例也全部通过。
+
+\section{实验总结}
+通过本次实验，我对词法分析器的工程实现过程有了系统认识。相比只停留在理论层面的“正则匹配”，本实验强调了编译器前端实现中的细节一致性：
+\begin{itemize}
+  \item 词法规则的完备性直接影响后续语法分析的稳定性；
+  \item 位置信息与标记输出属于“功能正确之外”的关键质量指标；
+  \item 预处理行信息的处理是实现与真实编译器行为对齐的重要环节；
+  \item 自动化评测与参考对比是快速定位问题、迭代修复的有效方法。
+\end{itemize}
+
+后续可以继续在本实现基础上扩展字符常量、字符串常量与更多 C 语言词法特性，并为错误输入添加更完善的诊断信息，以提升词法分析器的鲁棒性和可维护性。
+
+\end{document}
