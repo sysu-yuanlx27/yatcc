@@ -56,7 +56,8 @@ print_token()
     outFile << "\t[StartOfLine]";
   if (lex::g.mLeadingSpace)
     outFile << "\t[LeadingSpace]";
-  outFile << "\tLoc=<0:0>\n";
+  outFile << "\tLoc=<" << lex::g.mFile << ":" << lex::g.mLine << ":"
+          << lex::g.mTokenColumn << ">\n";
   outFile << std::flush;
 }
 
@@ -73,6 +74,8 @@ main(int argc, char* argv[])
     std::cerr << "Failed to open " << argv[1] << '\n';
     return -2;
   }
+
+  lex::g.mFile = argv[1];
 
   outFile = std::ofstream(argv[2]);
   if (!outFile) {

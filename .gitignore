@@ -19,3 +19,5 @@ pybind11/*
 !.devcontainer/upload-images.sh
 
 .DS_Store
+
+*.code-workspace
