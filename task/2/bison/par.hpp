@@ -1,6 +1,7 @@
 #pragma once
 
 #include "asg.hpp"
+#include <cstdint>
 #include <memory>
 #include <stack>
 #include <unordered_map>
@@ -35,5 +36,8 @@ private:
 using Decls = std::vector<asg::Decl*>;
 
 using Exprs = std::vector<asg::Expr*>;
+
+// Evaluate a simple integer constant expression used by array declarators.
+std::int64_t eval_constexpr(asg::Expr* expr);
 
 } // namespace par

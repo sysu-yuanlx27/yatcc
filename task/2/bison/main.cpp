@@ -33,23 +33,21 @@ main(int argc, char* argv[])
   std::cout << "输入 " << argv[1] << std::endl;
   std::cout << "输出 " << argv[2] << std::endl;
 
-  // 从源代码生成抽象语义图
-  yydebug = 1; // 启用 Bison 的调试输出
+  yydebug = 0;
   if (auto e = yyparse())
     return e;
   par::gMgr.mRoot = par::gTranslationUnit;
   par::gMgr.gc();
 
-  // 执行类型检查
   asg::Typing typing(par::gMgr);
   typing(par::gTranslationUnit);
   typing.mTypeCache.clear();
   par::gMgr.gc();
 
-  // 将抽象语义图转换为 JSON 并输出
   asg::Asg2Json asg2json;
   llvm::json::Value json = asg2json(par::gTranslationUnit);
   outFile << json << '\n';
 
   fclose(yyin);
+  return 0;
 }

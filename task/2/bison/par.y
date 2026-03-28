@@ -5,8 +5,8 @@
 %define parse.trace
 
 %code top {
-int yylex (void);             // 该函数由 Flex 生成
-void yyerror (char const *);	// 该函数定义在 par.cpp 中
+int yylex(void);             // 该函数由 Flex 生成
+void yyerror(char const*);   // 该函数定义在 par.cpp 中
 }
 
 %code requires {
@@ -42,10 +42,9 @@ void yyerror (char const *);	// 该函数定义在 par.cpp 中
 %type <Expr> expression primary_expression assignment_expression initializer initializer_list
 %type <Expr> logical_or_expression logical_and_expression equality_expression relational_expression
 
-%type <Stmt> block_item statement
+%type <Stmt> block_item statement expression_statement jump_statement
+%type <Stmt> selection_statement iteration_statement
 %type <CompoundStmt> compound_statement block_item_list
-%type <ExprStmt> expression_statement
-%type <ReturnStmt> jump_statement
 
 %type <Decls> external_declaration declaration init_declarator_list parameter_list
 %type <Exprs> argument_expression_list
@@ -55,9 +54,11 @@ void yyerror (char const *);	// 该函数定义在 par.cpp 中
 %type <TranslationUnit> translation_unit
 
 %token <RawStr> IDENTIFIER CONSTANT
-%token INT VOID
+%token INT VOID CONST IF ELSE WHILE BREAK CONTINUE RETURN
+%token LE_OP GE_OP EQ_OP NE_OP AND_OP OR_OP
 
-%token RETURN
+%nonassoc LOWER_THAN_ELSE
+%nonassoc ELSE
 
 %start start
 
@@ -65,7 +66,7 @@ void yyerror (char const *);	// 该函数定义在 par.cpp 中
 
 // 起始符号
 start
-  :	{
+  : {
       par::Symtbl::g = new par::Symtbl();
     }
     translation_unit
@@ -79,14 +80,14 @@ translation_unit
   : external_declaration
     {
       $$ = par::gMgr.make<asg::TranslationUnit>();
-      for (auto&& decl: *$1)
+      for (auto&& decl : *$1)
         $$->decls.push_back(decl);
       delete $1;
     }
   | translation_unit external_declaration
     {
       $$ = $1;
-      for (auto&& decl: *$2)
+      for (auto&& decl : *$2)
         $$->decls.push_back(decl);
       delete $2;
     }
@@ -106,17 +107,17 @@ function_definition
     {
       auto funcDecl = $2->dcst<asg::FunctionDecl>();
       ASSERT(funcDecl);
-      // 设置当前全局的函数作用变量
-      par::gCurrentFunction = funcDecl; 
+      par::gCurrentFunction = funcDecl;
+
       auto ty = par::gMgr.make<asg::Type>();
       if (funcDecl->type != nullptr)
-        ty->texp = funcDecl->type->texp; 
-      ty->spec = $1->spec, ty->qual = $1->qual;
+        ty->texp = funcDecl->type->texp;
+      ty->spec = $1->spec;
+      ty->qual = $1->qual;
       funcDecl->type = ty;
-
     }
     compound_statement
-    {	
+    {
       $$ = par::gCurrentFunction;
       $$->name = $2->name;
       $$->body = $4;
@@ -126,19 +127,13 @@ function_definition
 declaration
   : declaration_specifiers init_declarator_list ';'
     {
-      for (auto decl: *$2)
-      {
+      for (auto decl : *$2) {
         auto ty = par::gMgr.make<asg::Type>();
         if (decl->type != nullptr)
-          ty->texp = decl->type->texp; // 保留前面 ArrayType 的texp
-        ty->spec = $1->spec, ty->qual = $1->qual;
+          ty->texp = decl->type->texp;
+        ty->spec = $1->spec;
+        ty->qual = $1->qual;
         decl->type = ty;
-        auto varDecl = dynamic_cast<asg::VarDecl*>(decl);
-        if (varDecl != nullptr)
-        {
-          if (varDecl->init != nullptr)
-            varDecl->init->type = decl->type;
-        }
       }
       $$ = $2;
     }
@@ -146,6 +141,11 @@ declaration
 
 declaration_specifiers
   : type_specifier { $$ = $1; }
+  | CONST declaration_specifiers
+    {
+      $$ = $2;
+      $$->qual.const_ = true;
+    }
   | type_specifier declaration_specifiers
     {
       $$ = $2;
@@ -173,53 +173,40 @@ declarator
       $$->name = std::move(*$1);
       delete $1;
 
-      // 插入符号表
       par::Symtbl::g->insert_or_assign($$->name, $$);
     }
-  | declarator '[' ']' // 未知长度数组
+  | declarator '[' ']'
     {
-      $$ = $1; 
-      // 填充Type
+      $$ = $1;
       auto ty = par::gMgr.make<asg::Type>();
       if ($$->type != nullptr)
-        ty->texp=$$->type->texp;
+        ty->texp = $$->type->texp;
+
       auto p = par::gMgr.make<asg::ArrayType>();
       p->len = asg::ArrayType::kUnLen;
       if (ty->texp == nullptr)
-      {
         ty->texp = p;
-      }
       else
-      {
         ty->texp->sub = p;
-      }
       $$->type = ty;
 
-      // 插入符号表
       par::Symtbl::g->insert_or_assign($$->name, $$);
     }
-  | declarator '[' assignment_expression ']' // 数组定义
+  | declarator '[' assignment_expression ']'
     {
-      $$ = $1; 
-      // 填充Type
+      $$ = $1;
       auto ty = par::gMgr.make<asg::Type>();
       if ($$->type != nullptr)
-        ty->texp=$$->type->texp;
+        ty->texp = $$->type->texp;
+
       auto p = par::gMgr.make<asg::ArrayType>();
-      auto integerLiteral = $3->dcst<asg::IntegerLiteral>();
-      ASSERT(integerLiteral);
-      p->len = integerLiteral->val;
+      p->len = static_cast<std::uint32_t>(par::eval_constexpr($3));
       if (ty->texp == nullptr)
-      {
         ty->texp = p;
-      }
       else
-      {
         ty->texp->sub = p;
-      }
       $$->type = ty;
 
-      // 插入符号表
       par::Symtbl::g->insert_or_assign($$->name, $$);
     }
   | declarator '(' ')'
@@ -231,26 +218,22 @@ declarator
       ty->texp = p;
       $$->type = ty;
 
-      // 插入符号表
       par::Symtbl::g->insert_or_assign($$->name, $$);
     }
-  // 函数列表的定义
   | declarator '(' parameter_list ')'
     {
       auto p = par::gMgr.make<asg::FunctionDecl>();
       p->name = $1->name;
       p->params = *$3;
-      auto ty = par::gMgr.make<asg::Type>();
-      auto functionType = par::gMgr.make<asg::FunctionType>();
-      for (auto decl: *$3)
-      {
-        functionType->params.push_back(decl->type);
-      }
-      ty->texp = functionType;
-      p->type = ty;
-      $$ = p;
 
-      // 插入符号表
+      auto ty = par::gMgr.make<asg::Type>();
+      auto fty = par::gMgr.make<asg::FunctionType>();
+      for (auto decl : *$3)
+        fty->params.push_back(decl->type);
+      ty->texp = fty;
+      p->type = ty;
+
+      $$ = p;
       par::Symtbl::g->insert_or_assign($$->name, $$);
     }
   ;
@@ -271,26 +254,28 @@ parameter_list
 parameter_declaration
   : declaration_specifiers declarator
     {
-      // 保留之前定义的 Type
       auto ty = par::gMgr.make<asg::Type>();
       if ($2->type != nullptr)
         ty->texp = $2->type->texp;
-      ty->spec = $1->spec, ty->qual = $1->qual;
+      ty->spec = $1->spec;
+      ty->qual = $1->qual;
       $2->type = ty;
       $$ = $2;
     }
   ;
 
 compound_statement
-  : {$$ = par::gMgr.make<asg::CompoundStmt>();} // 代码块为空的情况
-  |'{' '}' { $$ = par::gMgr.make<asg::CompoundStmt>(); }
+  : '{' '}'
+    {
+      $$ = par::gMgr.make<asg::CompoundStmt>();
+    }
   | '{'
-    { new par::Symtbl(); } 		// 开启新的符号表作用域
+    { new par::Symtbl(); }
     block_item_list
     '}'
     {
-      delete par::Symtbl::g; 	// 结束符号表作用域
-      $$ = $block_item_list;
+      delete par::Symtbl::g;
+      $$ = $3;
     }
   ;
 
@@ -311,9 +296,10 @@ block_item
   : declaration
     {
       auto p = par::gMgr.make<asg::DeclStmt>();
-      for (auto decl: *$1)
+      for (auto decl : *$1)
         p->decls.push_back(decl);
       $$ = p;
+      delete $1;
     }
   | statement { $$ = $1; }
   ;
@@ -322,28 +308,74 @@ statement
   : compound_statement { $$ = $1; }
   | expression_statement { $$ = $1; }
   | jump_statement { $$ = $1; }
+  | selection_statement { $$ = $1; }
+  | iteration_statement { $$ = $1; }
   ;
 
 expression_statement
-  : expression ';'
+  : ';'
     {
-      $$ = par::gMgr.make<asg::ExprStmt>();
-      $$->expr = $1;
+      $$ = par::gMgr.make<asg::NullStmt>();
+    }
+  | expression ';'
+    {
+      auto p = par::gMgr.make<asg::ExprStmt>();
+      p->expr = $1;
+      $$ = p;
     }
   ;
 
 jump_statement
   : RETURN ';'
     {
-      $$ = par::gMgr.make<asg::ReturnStmt>();
-      $$->func = par::gCurrentFunction;
+      auto p = par::gMgr.make<asg::ReturnStmt>();
+      p->func = par::gCurrentFunction;
+      $$ = p;
     }
   | RETURN expression ';'
     {
-      $$ = par::gMgr.make<asg::ReturnStmt>();
-      $$->func = par::gCurrentFunction;
-      $$->expr = $2;
+      auto p = par::gMgr.make<asg::ReturnStmt>();
+      p->func = par::gCurrentFunction;
+      p->expr = $2;
+      $$ = p;
     }
+  | BREAK ';'
+    {
+      $$ = par::gMgr.make<asg::BreakStmt>();
+    }
+  | CONTINUE ';'
+    {
+      $$ = par::gMgr.make<asg::ContinueStmt>();
+    }
+  ;
+
+selection_statement
+  : IF '(' expression ')' statement %prec LOWER_THAN_ELSE
+    {
+      auto p = par::gMgr.make<asg::IfStmt>();
+      p->cond = $3;
+      p->then = $5;
+      $$ = p;
+    }
+  | IF '(' expression ')' statement ELSE statement
+    {
+      auto p = par::gMgr.make<asg::IfStmt>();
+      p->cond = $3;
+      p->then = $5;
+      p->else_ = $7;
+      $$ = p;
+    }
+  ;
+
+iteration_statement
+  : WHILE '(' expression ')' statement
+    {
+      auto p = par::gMgr.make<asg::WhileStmt>();
+      p->cond = $3;
+      p->body = $5;
+      $$ = p;
+    }
+  ;
 
 expression
   : assignment_expression { $$ = $1; }
@@ -351,7 +383,8 @@ expression
     {
       auto p = par::gMgr.make<asg::BinaryExpr>();
       p->op = asg::BinaryExpr::Op::kComma;
-      p->lft = $1, p->rht = $3;
+      p->lft = $1;
+      p->rht = $3;
       $$ = p;
     }
   ;
@@ -361,52 +394,150 @@ assignment_expression
   | unary_expression '=' assignment_expression
     {
       auto p = par::gMgr.make<asg::BinaryExpr>();
-      p->op = asg::BinaryExpr::Op::kAssign;;
-      p->lft = $1, p->rht = $3;
+      p->op = asg::BinaryExpr::Op::kAssign;
+      p->lft = $1;
+      p->rht = $3;
       $$ = p;
     }
   ;
 
 logical_or_expression
   : logical_and_expression { $$ = $1; }
+  | logical_or_expression OR_OP logical_and_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kOr;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
   ;
 
 logical_and_expression
   : equality_expression { $$ = $1; }
+  | logical_and_expression AND_OP equality_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kAnd;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
   ;
 
 equality_expression
   : relational_expression { $$ = $1; }
+  | equality_expression EQ_OP relational_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kEq;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
+  | equality_expression NE_OP relational_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kNe;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
   ;
 
 relational_expression
   : additive_expression { $$ = $1; }
+  | relational_expression '<' additive_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kLt;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
+  | relational_expression '>' additive_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kGt;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
+  | relational_expression LE_OP additive_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kLe;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
+  | relational_expression GE_OP additive_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kGe;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
   ;
 
 additive_expression
-  : multiplicative_expression { $$ = $1;}
+  : multiplicative_expression { $$ = $1; }
   | additive_expression '+' multiplicative_expression
     {
       auto p = par::gMgr.make<asg::BinaryExpr>();
       p->op = asg::BinaryExpr::Op::kAdd;
-      p->lft = $1, p->rht = $3;
+      p->lft = $1;
+      p->rht = $3;
       $$ = p;
     }
   | additive_expression '-' multiplicative_expression
     {
       auto p = par::gMgr.make<asg::BinaryExpr>();
       p->op = asg::BinaryExpr::Op::kSub;
-      p->lft = $1, p->rht = $3;
+      p->lft = $1;
+      p->rht = $3;
       $$ = p;
     }
   ;
 
 multiplicative_expression
-  : unary_expression  { $$ = $1;}
+  : unary_expression { $$ = $1; }
+  | multiplicative_expression '*' unary_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kMul;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
+  | multiplicative_expression '/' unary_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kDiv;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
+  | multiplicative_expression '%' unary_expression
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kMod;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
   ;
 
 unary_expression
-  : postfix_expression { $$ = $1;}
+  : postfix_expression { $$ = $1; }
+  | '+' unary_expression
+    {
+      auto p = par::gMgr.make<asg::UnaryExpr>();
+      p->op = asg::UnaryExpr::Op::kPos;
+      p->sub = $2;
+      $$ = p;
+    }
   | '-' unary_expression
     {
       auto p = par::gMgr.make<asg::UnaryExpr>();
@@ -414,16 +545,44 @@ unary_expression
       p->sub = $2;
       $$ = p;
     }
+  | '!' unary_expression
+    {
+      auto p = par::gMgr.make<asg::UnaryExpr>();
+      p->op = asg::UnaryExpr::Op::kNot;
+      p->sub = $2;
+      $$ = p;
+    }
   ;
 
 postfix_expression
   : primary_expression { $$ = $1; }
+  | postfix_expression '[' expression ']'
+    {
+      auto p = par::gMgr.make<asg::BinaryExpr>();
+      p->op = asg::BinaryExpr::Op::kIndex;
+      p->lft = $1;
+      p->rht = $3;
+      $$ = p;
+    }
+  | postfix_expression '(' ')'
+    {
+      auto p = par::gMgr.make<asg::CallExpr>();
+      p->head = $1;
+      $$ = p;
+    }
+  | postfix_expression '(' argument_expression_list ')'
+    {
+      auto p = par::gMgr.make<asg::CallExpr>();
+      p->head = $1;
+      p->args = *$3;
+      delete $3;
+      $$ = p;
+    }
   ;
 
 primary_expression
   : IDENTIFIER
     {
-      // 查找符号表, 找到对应的Decl
       auto decl = par::Symtbl::resolve(*$1);
       ASSERT(decl);
       delete $1;
@@ -434,8 +593,14 @@ primary_expression
   | CONSTANT
     {
       auto p = par::gMgr.make<asg::IntegerLiteral>();
-      p->val = std::stoull(*$1, nullptr, 10);
+      p->val = std::stoull(*$1, nullptr, 0);
       delete $1;
+      $$ = p;
+    }
+  | '(' expression ')'
+    {
+      auto p = par::gMgr.make<asg::ParenExpr>();
+      p->sub = $2;
       $$ = p;
     }
   ;
@@ -472,30 +637,15 @@ init_declarator
     {
       auto varDecl = $1->dcst<asg::VarDecl>();
       ASSERT(varDecl);
-      $3->type = varDecl->type;
       varDecl->init = $3;
       $$ = varDecl;
     }
   ;
 
- // 初始化右值
 initializer
   : assignment_expression
     {
-      auto callExpr = $1->dcst<asg::CallExpr>();
-      if (callExpr != nullptr)
-      {
-        auto implicitCastExpr = dynamic_cast<asg::ImplicitCastExpr*>(callExpr->head);
-        auto declRefExpr = dynamic_cast<asg::DeclRefExpr*>(implicitCastExpr->sub);
-        $$ = callExpr;
-      }
-      else
-      {
-        auto p = par::gMgr.make<asg::InitListExpr>();
-        p->list.push_back($1);
-        $$ = p;
-      }
-      $$->type = $1->type;
+      $$ = $1;
     }
   | '{' initializer_list '}'
     {
@@ -503,24 +653,33 @@ initializer
     }
   | '{' '}'
     {
-      auto p = par::gMgr.make<asg::InitListExpr>();
-      $$ = p;
+      $$ = par::gMgr.make<asg::InitListExpr>();
     }
   ;
 
-// 初始化列表
 initializer_list
   : initializer
     {
-      $$ = $1;
+      auto p = par::gMgr.make<asg::InitListExpr>();
+      if (auto list = $1->dcst<asg::InitListExpr>()) {
+        for (auto expr : list->list)
+          p->list.push_back(expr);
+      } else {
+        p->list.push_back($1);
+      }
+      $$ = p;
     }
   | initializer_list ',' initializer
     {
-      auto initListExpr3 = $3->dcst<asg::InitListExpr>();
-      auto initListExpr1 = $1->dcst<asg::InitListExpr>();
-      for(auto exper: initListExpr3->list)
-        initListExpr1->list.push_back(exper);
-      $$ = initListExpr1;
+      auto p = $1->dcst<asg::InitListExpr>();
+      ASSERT(p);
+      if (auto list = $3->dcst<asg::InitListExpr>()) {
+        for (auto expr : list->list)
+          p->list.push_back(expr);
+      } else {
+        p->list.push_back($3);
+      }
+      $$ = p;
     }
   ;
 
