@@ -1,0 +1,78 @@
+\documentclass[UTF8,a4paper,12pt]{ctexart}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{hyperref}
+
+\geometry{left=2.8cm,right=2.8cm,top=2.8cm,bottom=2.8cm}
+\setstretch{1.25}
+
+\title{实验二报告：语法分析器（Flex + Bison 实现）}
+\author{姓名：元朗曦 \quad 学号：23336294}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{实验目的}
+本实验的目标是完成编译器前端中的语法分析阶段，将词法分析阶段得到的输入（预处理后的源代码或词法单元流）构建为抽象语义图，并最终输出与 clang 语法树结构一致的 JSON 结果。
+
+通过本实验，需要达到以下能力目标：
+\begin{itemize}
+  \item 理解语法分析器在编译流程中的职责，以及其与词法分析、类型检查、中间表示生成之间的关系；
+  \item 掌握 Flex 与 Bison 协作方式，能够设计 token 规则与文法产生式并绑定语义动作；
+  \item 掌握表达式优先级、控制流语句、数组与函数声明/调用等语法结构的语义结点构造方法；
+  \item 能够通过自动化测评验证语法树输出正确性，并分析修复语法实现中的工程问题。
+\end{itemize}
+
+\section{实验原理}
+实验二采用“词法分析 + 语法分析 + 语义图输出”的三段式流程。
+
+第一，Flex 负责将输入字符流或 token 文本流转换为 Bison 可消费的 token 序列。其核心在于：
+\begin{itemize}
+  \item 识别关键字、标识符、整数常量、运算符与分隔符；
+  \item 在普通模式下直接扫描预处理后的 C 源代码；
+  \item 在复活模式下解析任务一输出的 token 行文本并映射回对应 token id。
+\end{itemize}
+
+第二，Bison 依据上下文无关文法进行自底向上归约，并在每条产生式中执行语义动作构建 ASG 结点。文法覆盖了实验测例需要的核心语法子集，包括：
+\begin{itemize}
+  \item 声明与定义：变量、常量、数组、函数及参数列表；
+  \item 语句结构：复合语句、表达式语句、if/else、while、break、continue、return；
+  \item 表达式体系：赋值、逻辑与关系、算术、括号、函数调用、数组下标、初始化列表。
+\end{itemize}
+
+第三，在语法树（语义图）构建后执行类型检查（Typing），再通过 Asg2Json 将语义图序列化为 JSON，从而与 clang 的 AST dump 结果进行对比评分。
+
+\section{实验内容}
+本次实现围绕实验框架中的 bison 路径展开，主要完成了以下工作：
+
+\begin{itemize}
+  \item 补全词法分析规则：新增/完善关键字、运算符、常量与标识符规则，并实现源代码输入与 token 行输入的双模式兼容；
+  \item 补全文法产生式：完善声明、语句、表达式、函数调用与数组下标等规则，并处理 if-else 结合优先级问题；
+  \item 完善语义动作：在归约过程中构造 BinaryExpr、UnaryExpr、CallExpr、IfStmt、WhileStmt、ReturnStmt、InitListExpr 等结点；
+  \item 增加数组长度常量表达式求值辅助逻辑，用于数组声明中的维度推导；
+  \item 恢复并打通主流程：输入读取 $\\rightarrow$ yyparse $\\rightarrow$ Typing $\\rightarrow$ Asg2Json 输出，形成完整实验二执行链路；
+  \item 使用官方评分目标进行全量验证，确保输出与参考答案一致。
+\end{itemize}
+
+验证命令示例：
+\begin{itemize}
+  \item \texttt{cd /YatCC/build \&\& ninja task2-score}
+\end{itemize}
+
+实验结果：官方测例全部通过，最终得分为 100.00/100.00。
+
+\section{实验总结}
+通过本实验，我对 Flex/Bison 构建语法分析器的工程过程有了更深入理解。相比纯理论文法推导，工程实现的关键在于“文法正确性、语义动作一致性、类型系统约束、评测输出对齐”四者的统一。
+
+本实验的主要收获包括：
+\begin{itemize}
+  \item 文法覆盖范围必须与测例语法特性保持一致，否则会在规模化测试中集中暴露问题；
+  \item 表达式优先级和二义性（如悬挂 \texttt{else}）是 Bison 实现中的高频难点，需要通过文法结构或优先级声明精确处理；
+  \item 语法分析并非终点，必须结合类型检查与 JSON 序列化结果来验证语义层面的正确性；
+  \item 自动化评分体系能显著提升迭代效率，是定位语法缺口与回归验证的关键手段。
+\end{itemize}
+
+后续可在当前实现基础上继续扩展更完整的 C 语法特性与错误恢复机制，以提升编译器前端在复杂输入下的健壮性和可维护性。
+
+\end{document}
