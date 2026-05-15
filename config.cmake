@@ -11,18 +11,18 @@ set(TASK1_LOG_LEVEL 3)
 # 实验二的完成方式："bison"或"antlr"
 set(TASK2_WITH "bison")
 # 是否在实验二复活，ON或OFF
-set(TASK2_REVIVE OFF)
+set(TASK2_REVIVE ON)
 # 实验二的日志级别，级别从低到高为0-3
 set(TASK2_LOG_LEVEL 3)
 
 # 是否在实验三复活，ON或OFF
-set(TASK3_REVIVE OFF)
+set(TASK3_REVIVE ON)
 
 # 是否在实验四复活，ON或OFF
-set(TASK4_REVIVE OFF)
+set(TASK4_REVIVE ON)
 
 # 是否在实验五复活，ON或OFF
-set(TASK5_REVIVE OFF)
+set(TASK5_REVIVE ON)
 
 # ############################################################################ #
 # 以下内容为内部环境配置，一般情况下不需要学生修改，学生本地的修改对实验评测无影响。
